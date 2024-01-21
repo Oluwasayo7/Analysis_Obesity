@@ -1,0 +1,745 @@
+---
+title: "Analysis & Reporting of Obesity in Georgia, U.S and Neighboring States"
+author: "Oluwasayo Farotimi"
+date: "2024-01-20"
+output:
+  html_document:
+    df_print: paged
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Content
+* Section 1: Overview
+* Section 2: Data (Survey)
+* Section 3: Tidying and Cleaning
+* Section 4: Data Transformation
+* Section 5: Data Visualization 
+* Section 6: Rshiny App
+* Section 7: Reporting
+* Section 8: References
+
+\newpage
+
+# Section 1: Overview
+
+This report focuses on the vital health problem of Obesity in the United States which became prevalent in western countries in the 1980s. By definition, Obesity is a case where the Body Mass Index is equal or above 30 due to abnormal or excessive fat accumulation. The progression of Obesity among adults of age 20 - 74 has risen over the years from 15% (1976 - 1980) to 23.3%  (1988 - 1994) to 30.9% (in 1999 - 2000).
+
+Here are some causes of this obesity pandemic:
+
+* Dietary Fat
+* Sugar and Sugar-Sweetened Beverages
+* Hike of farm bills and food prices
+
+The rate of increase in obesity population has continued in an upward movement from 2000 - 2016. My project follows an examination into this from the year 2015 - 2021. 
+
+An investigation into the obesity population in Georgia has been conducted which has birthed this report regarding the trend in the specified year(s). A cross examination of neighboring states has also been carried out to include Obesity percentages in Alabama, Tennessee, North Carolina, South Carolina and Florida in comparison to Georgia, to understand how these border states are performing.
+
+
+
+\newpage
+# Section 2: Data (Survey)
+
+The Data used in this analysis is a survey from Behavioral Risk Factor Surveillance System (BRFSS). It was obtained from the Center for Disease Control and Prevention (CDC) which can be found via: https://data.cdc.gov/Healthy-Aging/Alzheimer-s-Disease-and-Healthy-Aging-Data/hfr9-rurv
+
+The title of the data is "Alzheimer's disease and healthy aging in the United States", it is a survey of 39 health concerns ranging from Alzheimer's to Depression to the primary case of concern in this project which is Obesity. The Author is keen on interpreting the survey, cleaning and transforming data, Visualizing characteristics, creating an interactive web app (Rshiny) and providing a report of findings.
+
+
+```{r libraries, message=FALSE, warning=FALSE}
+#Needed Libraries
+library(dplyr)
+library(tidyverse)
+library(knitr)
+library(plotly)
+library(shiny)
+library(reshape2)
+library(MASS)
+library(shiny)
+library(plotly)
+```
+
+**Reading the data** 
+
+
+```{r data}
+df =read.csv("/Users/mac/Downloads/Alzheimer_s_Disease_and_Healthy_Aging_Data.csv")
+
+#viewing the top 5 rows of the dataframe
+#output for the head of data will not be shown in pdf version of the project.
+head(df)
+
+#checking the structure of the data
+str(df)
+```
+\newpage
+### Information about Variables
+
+Readers should note that in this case, an observation/ row of data is not a response given by one (1) person, rather, it is the aggregated values of responses of people of a particular gender, race  or within an age group in a geographical location.
+Here are the descriptions for the ambiguous columns in the dataset:
+
+* "BRFSS" - a unique identifier for the survey observation
+* "Class" - health classification for the  "survey observation" 
+* "Topic" - health focus for "survey observation"
+* "YearStart" - start Year of the "survey observation"
+* "YearEnd" - end Year of the "survey observation"
+* "Question" - question asked in the "survey observation"
+* "Data_Value_Type" - metric in which the data we have for the "survey observation" was recorded
+* "Data_Value" - data Value 
+* "Data_Value_Alt" - alternative value which should serve as a replacement for Data Value
+* "StratificationCategory1" - first layer of Category which was applied during the survey such as Age
+* "Stratification1" - component of the first layer (for instance: in Age, you can find "50 - 64 years" or "65 years or older")
+* "StratificationCategory2" - second layer of Category which was applied during the survey such as Race or Gender
+* "Stratification2" - component of the second layer (for instance: in Gender, you can find "Male" or "Female")
+* "Geolocation" - Geographical location in which the survey was carried out.
+
+
+\newpage
+# Section 3 - Tidying and Cleaning
+
+* 3a. The survey file has 250937 observations of  39 variables
+* 3b. Examine empty columns, null Values and unique values 
+* 3c. Are there identical columns (columns that have the same entries)?
+* 3d. Are all datatypes appropriate?
+
+
+### 3a. The survey file has 250937 observations of  39 variables
+This is a very large dataframe and survey, we have quarter of a million rows. The dataframe is not in the typical format, so much data about various health concerns are recorded simultaneously. 
+
+### 3b. Examine empty columns, Null Values and Unique Values 
+From viewing the structure of the database in the previous section, It should be observed that the last 3 dataframes appear to be empty, some other columns also seem empty. It is important to check if there are other empty columns as well.
+
+For this,we will need a function: 
+
+```{r identify empty columns}
+empty_columns <- function(df) {
+  empty_cols <- colSums(is.na(df)) == nrow(df)
+  return(which(empty_cols))
+}
+
+empty_columns(df)
+#The values beneath these columns refer to the position of the column in the database.
+```
+
+
+There are 8 empty columns which will be dropped, these columns are totally empty and we have no use for them. Missing values will also be checked.
+
+```{r dropping columns & NA values}
+#Dropping Identified columns
+df <- df |> dplyr::select(-Response, -Sample_Size, -StratificationCategory3, 
+                   - Stratification3, -ResponseID, -StratificationCategoryID3,
+                   -StratificationID3, - Report)
+
+# we check for missing values
+colSums(is.na(df))
+```
+
+
+Although, R shows us that there are no missing values, we have to investigate some columns, particularly the "Geolocation", "Datavalue_Footnote" and "Data_Value_Footnote_symbol". In section 2, we can see them as empty strings, if this is the case throughout the database, then they should also be dropped at this point of our data cleaning process.
+
+```{r Nunique values}
+#creating a function in R to identify the number of unique values in a dataframe
+nunique <- function(x) {
+  length(unique(x))
+}
+
+paste( "The Number of unique values in the Geolocation Column is:",
+       nunique(df$Geolocation))
+paste( "The Number of unique values in the Data Value Footnote Column is:",
+       nunique(df$Data_Value_Footnote))
+paste( "The Number of unique values in the Data Value Footnote Symbol Column is:",
+       nunique(df$Data_Value_Footnote_Symbol))
+```
+
+We have confirmed that we have other values in the dataframe, hence, the columns are deemed useful.
+
+It is important to examine the number of unique values in the dataframe and the content of all variables so we can further analyze the survey. For that, a function will be created:
+
+```{r Unique Values, results="hide"}
+#The output of this is very lengthy, hence, it will not be shown.
+
+checkUniqueValues <- function(data, columns) {
+  unique_values_list <- lapply(data[columns], unique)
+  unique_values <- data.frame(column_name = names(unique_values_list), unique_values_list)
+  return(unique_values)
+}
+
+columns <- c("YearStart", "YearEnd", "LocationAbbr", "LocationDesc", "Datasource" , 
+             "Class", "Topic", "Question", "Data_Value_Unit", "DataValueTypeID", 
+             "Data_Value_Type" , "Data_Value_Footnote_Symbol", "Data_Value_Footnote", 
+             "StratificationCategory1", "Stratification1", "StratificationCategory2",
+             "Stratification2", "Geolocation", "ClassID", "TopicID", "QuestionID", 
+             "LocationID", "StratificationCategoryID1", "StratificationID1", 
+             "StratificationCategoryID2", "StratificationID2")
+
+
+unique_values_list <- lapply(columns, function(col_name) {
+  col <- df[[col_name]]
+  length_unique <- length(unique(col))
+  cat("Number of unique values in", col_name, ":", length_unique, "\n")
+  unique_values <- unique(col)
+  cat("Unique values:", "\n")
+  print(unique_values)
+  cat("\n")
+  return(unique_values)
+})
+```
+
+### 3c. Identical Columns
+
+Upon reviewing the output above, it is noted that some columns seem identical, These columns are 
+* YearStart and YearEnd
+* Data_Value and Data_Value_Alt
+
+```{r identical columns}
+
+#Checking if the above columns are truly identical
+identical(df$YearStart, df$YearEnd)
+identical(df$Data_Value, df$Data_Value_Alt)
+```
+
+
+```{r drop datavalue alt}
+#Dropping Data_Value_Alt since it is identical and provides no new information.
+df <- df |> dplyr::select(-Data_Value_Alt)
+
+```
+
+Also, it appears that not all surveys were carried out in one(1) year time frame, if the YearStart and YearEnd entries were identical then we would have concluded that all survey observations were carried in one(1) year period. To understand our survey more, a function will be created to view these rows:
+
+```{r Year columns}
+#number of observations out of 250937 survey obs. that do not have the same start and year end.
+sum(df$YearStart != df$YearEnd)
+#There are only 11482 observations survey observations that have this characteristic
+
+
+not_same_year <- df[df$YearStart != df$YearEnd, ]
+not_same_year <- not_same_year |> dplyr::select("YearStart", "YearEnd")
+kable(head(not_same_year))
+```
+
+
+```{r new review year}
+unique(not_same_year$YearStart)
+unique(not_same_year$YearEnd)
+```
+
+The period above can be seen to only go from 2016 - 2021, which corresponds to the farthest and most recent year in the master database.
+We can form a new conclusion that the survey observations in the database either have the same start and end survey year or that the observations starts in 2016 and ends in 2021.
+
+
+### 3d. Are all datatypes appropriate?
+In this case,every variable has the right datatype,hence, no change will be done here.
+
+
+\newpage
+# Section 4 - Data Transformation
+In this section,data operations such as subsetting, filtering and manipulation of dataframes will be done in order to zoom into Georgia and neighboring states.
+
+### 4a Obesity in Georgia State
+```{r pressure}
+#subsetting observations that record data about Obesity
+df_obesity = df[df$Topic == 'Obesity', ]
+#9 columns are irrelevant at this point, this is because they contain the same value
+unneeded <- df_obesity |> dplyr::select(Class, Question, Topic, TopicID, QuestionID, 
+                                 Data_Value_Type, Data_Value_Unit, DataValueTypeID, 
+                                 StratificationCategory1, Datasource)
+head(unneeded)
+```
+
+
+
+```{r drop columns obesity}
+#drop unneeded columns for clarity in analysis and decision making
+df_obesity <- df_obesity |> dplyr::select(-Class, -Question, - Topic,-TopicID,
+                                   - QuestionID, -DataValueTypeID, -Data_Value_Type,
+                                   -StratificationCategory1, -Data_Value_Unit,
+                                   -Datasource)
+```
+
+
+To zoom in on Georgia, the dataframe will be filtered with 2021 will being the primary focus.
+```{r 2021 & Georgia}
+df_obesity_ga2021 = df_obesity[(df_obesity$YearStart == 2021) & 
+                                 (df_obesity$YearEnd == 2021) & 
+                                 (df_obesity$LocationDesc == "Georgia"),  ]
+```
+
+
+specific columns will be selected for the type of visualizations we want to create in the next section , since the "YearStart" and "YearEnd" values are the same,one of these variables will be selected and renamed to "Year", some other variables will be renamed as well, the index of the new dataframe will also be reset.
+```{r focus data}
+df_focus <- df_obesity_ga2021 |> dplyr::select(YearStart, Data_Value, Stratification1,
+                                         StratificationCategoryID2, Stratification2)
+                                        
+
+#rename column
+df_focus <- df_focus |>
+  rename(Year = YearStart, Category1 = Stratification1,
+         CategoryID2 = StratificationCategoryID2, Category2 = Stratification2,
+         Data_Percent = Data_Value)
+
+
+
+#reset index
+rownames(df_focus) <- 0:(nrow(df_focus) - 1)
+df_focus <- data.frame(df_focus)
+kable(head(df_focus))
+str(df_focus)
+```
+
+
+
+```{r 50-64 & Race df}
+# Our First focus is on the race of people with obesity from ages 50-64 Ages
+df_obesega1 <- df_focus[(df_focus$Category1 == '50-64 years') & 
+                          (df_focus$CategoryID2 == 'RACE'),] 
+kable(df_obesega1) 
+
+```
+
+In age group 50-64, There is no data for people who are Native American/ Alaskan Native. This could be due to the the location where the survey was conducted. However, we will prepare this dataframe for visualization by dropping these columns. This operation will be performed on subsequent dataframes. 
+
+
+
+```{r omit NA}
+df_obesega1 <- na.omit(df_obesega1)
+kable(df_obesega1)
+```
+
+
+```{r data for demographies}
+# Focusing on the Gender of people with obesity with ages 50-64 Ages
+df_obesega2 <- df_focus[(df_focus$Category1 == '50-64 years') & 
+                          (df_focus$CategoryID2 == 'GENDER'),]
+kable(df_obesega2) 
+
+#Focusing on the Race of people with obesity with ages 65 or older
+df_obesega3<- df_focus[(df_focus$Category1 == '65 years or older') & 
+                         (df_focus$CategoryID2 == 'RACE'),] |>
+  na.omit(df_obesega1)
+kable(df_obesega3) 
+
+#Focusing on the Gender of people with obesity with ages 65 or older
+df_obesega4<- df_focus[(df_focus$Category1 == '65 years or older') & 
+                         (df_focus$CategoryID2 == 'GENDER'),] 
+kable(df_obesega4) 
+
+#Examinining the overall percentage of Obese Persons in Georgia in the Year 2021
+kable(df_focus[(df_focus$Category1 == 'Overall') & (df_focus$CategoryID2 == 'OVERALL'),])
+
+```
+
+We will proceed to perform more transformations.
+Our focus will be widened to capture more data from 2016 - 2021,particularly the overall percentages.
+
+Scientific Inquiries 
+
+* What is the Overall yearly percentage of Obese persons in Georgia from 2016 - 2021?
+* Can we get a dataframe with corresponding percentages from 2016 - 2021 for neighboring states of Georgia?
+
+Answers will be provided to these inquiries in the next subsections
+
+\newpage
+### 4b. Obesity Rates in Georgia (%) from 2015 - 2021
+
+A function has been created for this:
+```{r function for Georgia}
+
+get_filtered_data <- function(year_start_list, year_end_list, location_list) {
+  combined_df <- data.frame()
+
+  for (i in seq_along(year_start_list)) {
+    df_new <- df_obesity[
+      (df_obesity$YearStart == year_start_list[i]) &
+      (df_obesity$YearEnd == year_end_list[i]) &
+      (df_obesity$LocationDesc == location_list[i]), ]
+
+    df_focus1 <- df_new |>
+      dplyr::select(Data_Value,YearStart,LocationDesc, StratificationCategoryID1,
+                    Stratification1, StratificationCategoryID2, Stratification2) |>
+      filter(Stratification1 == 'Overall' & StratificationCategoryID2 == 'OVERALL') |>
+       rename(Year = YearStart)
+
+    combined_df <- rbind(combined_df, data.frame(df_focus1))
+  }
+
+  return(combined_df)
+}
+
+# Example usage with lists
+year_start_list <- c(2015, 2016, 2017, 2018, 2019, 2020, 2021)
+year_end_list <- c(2015, 2016, 2017, 2018, 2019, 2020, 2021)
+location_list <- rep("Georgia", 7)
+
+df_ga_years <- get_filtered_data(year_start_list, year_end_list, location_list)
+
+head(df_ga_years)
+
+```
+
+\newpage
+### 4c. Obesity Rates(%) in Georgia and Neighboring States from 2015 - 2021
+
+The image below is a cutout map of the neighboring states of Georgia, we will focus on these additional 5 states as well.
+
+```{r image}
+knitr::include_graphics("/Users/mac/Downloads/Neigboring States of Georgia.png", rel_path = FALSE)
+```
+
+
+
+The previous function has been modified to get us the overall percentage(s) of obesity from neigboring States, Here a dataframe in form of a list of lists will be created:
+
+```{r function for Neighboring States}
+
+
+get_filtered_data <- function(year_start_list, year_end_list, location_list) {
+  state_data_list <- list()
+
+  for (state in unique(location_list)) {
+    df_new <- df_obesity[
+      (df_obesity$YearStart %in% year_start_list) &
+      (df_obesity$YearEnd %in% year_end_list) &
+      (df_obesity$LocationDesc == state), ]
+
+    df_focus2 <- df_new |>
+      dplyr::select(Data_Value,YearStart, LocationDesc, StratificationCategoryID1, Stratification1, StratificationCategoryID2, Stratification2) |>
+      filter(Stratification1 == 'Overall' & StratificationCategoryID2 == 'OVERALL') |>
+      rename(Year = YearStart)
+
+    state_data_list[[paste0("df_combined_", gsub(" ", "", state))]] <- data.frame(df_focus2)
+  }
+
+  return(state_data_list)
+}
+
+States <- c("Georgia", "Alabama", "Tennessee", "North Carolina", "South Carolina", "Florida")
+year_start_list <- c(2015, 2016, 2017, 2018, 2019, 2020, 2021)
+year_end_list <- c(2015, 2016, 2017, 2018, 2019, 2020, 2021)
+location_list <- rep(States, each = 7)
+
+df_neighborstates <- get_filtered_data(year_start_list, year_end_list, location_list)
+print(df_neighborstates)
+
+
+
+```
+
+```{r arrange year, results = 'hide'}
+
+arrange_by_year <- function(df, column_name) {
+  df[[column_name]] <- df[[column_name]] |>
+    arrange(Year)
+  return(df)
+}
+
+columns_to_arrange <- c(
+  "df_combined_Georgia",
+  "df_combined_Alabama",
+  "df_combined_Tennessee",
+  "df_combined_NorthCarolina",
+  "df_combined_SouthCarolina",
+  "df_combined_Florida"
+)
+
+for (column in columns_to_arrange) {
+  df_neighborstates <- arrange_by_year(df_neighborstates, column)
+}
+
+print(df_neighborstates)
+```
+
+### 4d Unrecorded Observation (Florida, 2021)
+The State of Florida does not have a value for the year 2021, This can be deemed as a missing value. To solve this problem, a row for 2021 which uses the value for 2019 & 2020 will be created.
+```{r missing value}
+data_2021 = (df_neighborstates$df_combined_Florida$Data_Value[5] + df_neighborstates$df_combined_Florida$Data_Value[6])/2
+
+fl_column2021 = c(data_2021, 2021, "Florida", "AGE", "Overall", "OVERALL", "")
+df_neighborstates$df_combined_Florida <- rbind(df_neighborstates$df_combined_Florida, fl_column2021)
+```
+
+
+The df_neighborstates is in in a list of list format which is not suitable for visualizations, hence, a new dataframe will be created for graphical needs.
+
+```{r data for visualization}
+#We will use one of the years in the state dataframes, since the years are all the same
+data_nstates <- data.frame(df_neighborstates$df_combined_Georgia$Year,
+                   df_neighborstates$df_combined_Georgia$Data_Value,
+                   df_neighborstates$df_combined_Alabama$Data_Value,
+                   df_neighborstates$df_combined_Tennessee$Data_Value,
+                   df_neighborstates$df_combined_NorthCarolina$Data_Value,
+                   df_neighborstates$df_combined_SouthCarolina$Data_Value,
+                   df_neighborstates$df_combined_Florida$Data_Value)
+
+data_nstates <- data_nstates |>
+  rename(Year = df_neighborstates.df_combined_Georgia.Year,
+         Georgia = df_neighborstates.df_combined_Georgia.Data_Value,
+         Alabama = df_neighborstates.df_combined_Alabama.Data_Value,
+         Tennessee = df_neighborstates.df_combined_Tennessee.Data_Value,
+         NorthCarolina = df_neighborstates.df_combined_NorthCarolina.Data_Value,
+         SouthCarolina = df_neighborstates.df_combined_SouthCarolina.Data_Value,
+         Florida = df_neighborstates.df_combined_Florida.Data_Value)
+
+#This is to change the data type of Florida from character to Int 
+data_nstates$Florida <- as.integer(data_nstates$Florida)
+
+kable(data_nstates)
+
+
+
+```
+
+
+
+The visualizations of the transformed data can be seen in Section 5.
+
+
+
+
+
+\newpage
+# Section 5 - Data Visualization
+
+### 5a. Barcharts
+```{r 50-64 & Race viz}
+# Visualization of race of people with obesity from ages 50-64 Ages
+fig <- plot_ly(df_obesega1, x = ~Category2, y = ~Data_Percent, type = 'bar',
+             text = paste(df_obesega1$Data_Percent, "%"), textposition = 'auto',
+             marker = list(color = 'rgb(158,202,225)',
+                           line = list(color = 'rgb(8,48,107)', width = 1.5)))
+fig <- fig %>% layout(title = "Obesity Rates Across Races: Aged 50 - 64 (Georgia, 2021)",
+         xaxis = list(title = "Race"),
+         yaxis = list(title = "Percentage", range = c(0, 55)))
+
+fig
+```
+
+
+```{r 50-64 & Gender viz}
+# Visualization of gender of people with obesity from ages 50-64 Ages
+fig <- plot_ly(df_obesega2, x = ~Category2, y = ~Data_Percent, type = 'bar',
+             text = paste(df_obesega2$Data_Percent, "%"), textposition = 'auto',
+             marker = list(color = 'rgb(158,202,225)',
+                           line = list(color = 'rgb(8,48,107)', width = 1.5)))
+fig <- fig %>% layout(title = "Obesity Rates across Genders: Aged 50 - 64 (Georgia, 2021)",
+         xaxis = list(title = "Gender"),
+         yaxis = list(title = "Percentage", range = c(0, 55)))
+
+fig
+```
+
+
+```{r 65 or older Race viz}
+# Visualization of race of people with obesity from age 65 or older
+fig <- plot_ly(df_obesega3, x = ~Category2, y = ~Data_Percent, type = 'bar',
+             text = paste(df_obesega3$Data_Percent, "%"), textposition = 'auto',
+             marker = list(color = 'rgb(158,202,225)',
+                           line = list(color = 'rgb(8,48,107)', width = 1.5)))
+fig <- fig %>% layout(title = "Obesity Rates Across Races: Aged 65 or Older (Georgia, 2021)",
+         xaxis = list(title = "Race"),
+         yaxis = list(title = "Percentage", range = c(0, 55)))
+
+fig
+```
+
+
+```{r 65 or older Gender viz}
+# Visualization of gender of people with obesity from age 65 or Older
+fig <- plot_ly(df_obesega4, x = ~Category2, y = ~Data_Percent, type = 'bar',
+             text = paste(df_obesega4$Data_Percent, "%"), textposition = 'auto',
+             marker = list(color = 'rgb(158,202,225)',
+                           line = list(color = 'rgb(8,48,107)', width = 1.5)))
+fig <- fig %>% layout(title = "Obesity Rates across Genders: Aged 65 or Older (Georgia, 2021)",
+         xaxis = list(title = "Race"),
+         yaxis = list(title = "Percentage", range = c(0, 35)))
+
+fig
+```
+
+
+\newpage
+### 5b. BoxPlot
+
+```{r Boxplot, warning = FALSE, message = FALSE}
+#Transformation for Boxplot: Converting the data to long format
+data_long <- data_nstates |>
+  dplyr::select(-Year) |>
+  melt()
+
+ggplot(data_long, aes(x = variable, y = value)) +         
+  geom_boxplot() +
+  labs(title = "Obesity Rates in Georgia and Neighboring States from 2015 - 2021",
+       x = "State",
+       y = "Percentage") 
+
+```
+
+
+
+\newpage
+### 5c. Linegraphs
+
+```{r line graph}
+fig <- plot_ly(df_ga_years, x = ~df_ga_years$Year, y = ~df_ga_years$Data_Value,
+               name = 'Georgia', type = 'scatter', mode = 'lines+markers',
+               text = paste(df_ga_years$Data_Value, "%"), textposition = 'auto') 
+
+fig <- fig %>% layout(
+    title = "Obesity Rates in Georgia from 2015 - 2021",
+    xaxis = list(title = "Year"),
+    yaxis = list(title = "Percentage")
+    )
+
+fig
+```
+
+
+
+
+```{r multiple line graph, warning=FALSE}
+
+library(plotly)
+
+fig <- plot_ly(data_nstates, x = ~data_nstates$Year, y = ~data_nstates$Georgia, 
+               name = 'Georgia', type = 'scatter', mode = 'lines') 
+fig <- fig %>% add_trace(y = ~data_nstates$Alabama, 
+                         name = 'Alabama', mode = 'lines')
+fig <- fig %>% add_trace(y = ~data_nstates$Tennessee,
+                         name = 'Tennessee', mode = 'lines')
+fig <- fig %>% add_trace(y = ~data_nstates$NorthCarolina,
+                         name = 'North Carolina', mode = 'lines')
+fig <- fig %>% add_trace(y = ~data_nstates$SouthCarolina,
+                         name = 'South Carolina', mode = 'lines')
+fig <- fig %>% add_trace(y = ~data_nstates$Florida,
+                         name = 'Florida', mode = 'lines')
+fig <- fig %>% layout(
+    title = "Obesity Rates from 2015 - 2021",
+    xaxis = list(title = "Year"),
+    yaxis = list(title = "Percentage")
+    )
+
+fig
+
+```
+
+\newpage
+### 5d. Kernel Density Estimation (KDE)
+For the KDE, we will use Georgia and Alabama State values over 7 Periods (2015 - 2021)
+
+```{r change datatype}
+
+surf <- kde2d(data_nstates$Georgia, data_nstates$Alabama)
+
+plot_ly(x = surf$x, y = surf$y, z = surf$z, 
+        type = "surface") |> 
+  add_trace(x = data_nstates$Georgia, 
+            y = data_nstates$Alabama, z = 0, 
+            type = "scatter3d", mode = "markers") |>
+  layout(title = "KDE of Obesity Rates in Georgia and Alabama for 7 Consecutive Periods",
+         scene = list(
+           xaxis = list(title = "% of Obesity in Georgia "),
+           yaxis = list(title = "% of Obesity in Alabama "),
+           zaxis = list(title = "Density")
+         ))
+
+```
+
+
+
+\newpage
+# Section 6: Rshiny App
+A Rshiny app has been created to further communicate the information from the dataset to the end users. This web app enables you to alternate between Georgia and all other neighboring states, upon which you will get a line graph for the overall obesity from 2015 - 2021.
+
+*You are advised to view the app using the Rmd file*
+
+```{r R shiny app}
+#Transformation for Rshiny app
+data1 <- data_nstates
+rownames(data1) <- data1$Year
+data1 <- data1 |> dplyr::select(-Year)
+
+#Rshiny App
+
+ui <- fluidPage(
+  titlePanel("Data Visualization for Obesity"),
+  radioButtons("state", label = "Choose Georgia or a Neighboring State", 
+               choices = unique(colnames(data1)), 
+               selected = colnames(data1)[1]),  
+  mainPanel(
+    plotlyOutput("line_plot")
+  )
+)
+
+server <- function(input, output, session) {
+  onSessionEnded(stopApp) 
+  output$line_plot <- renderPlotly({
+    fig <- plot_ly()
+    
+    state <- input$state 
+    
+    fig <- fig %>% add_trace(
+      x = ~rownames(data1),
+      y = ~data1[, state],
+      name = state,
+      type = 'scatter',
+      mode = 'lines'
+    )
+    
+    fig <- fig %>% layout(
+    title = "Obesity Rates from 2015 - 2021",
+    xaxis = list(title = "Year"),
+    yaxis = list(title = "Percentage")
+    )
+    fig
+  })
+}
+
+shinyApp(ui, server)
+
+
+```
+
+
+\newpage
+# Section 7: Reporting & Conclusion
+
+### In Georgia, For Year 2021: 
+#### Age group (50-64)
+* The rate of Obesity(%) for Black,Non Hispanic race is considerably higher(51.6%) than the rate in the Hispanic (35.3%) and White, Non-Hispanic races (37.4%)
+* The rate of Obesity(%) for Female Gender is slightly higher(42.6%) than the rate of the Male Gender (39.1%)
+
+#### Age group (65 or Older)
+* The rate of Obesity(%) for Black,Non Hispanic race is higher(37.8%) than the rate in White, non-Hispanic race (36.2%)
+* The rate of Obesity(%) for Male and Female Genders are similar (28.5% and 29.2% respectively).
+
+#### Overall
+* From 2017 to 2019, Georgia experienced an approximate 3% increase in Obesity.
+* From 2019 to 2021, Georgia experienced an approximate 1% decrease in Obesity.
+
+### Comparing Means of Georgia and Neighboring States
+* Alabama has the highest rate of Obesity while Florida has the lowest rate of Obesity from 2015 - 2021
+* Georgia, Tennessee, North Carolina, and South Carolina all have similar rates from 2015 - 2021
+* Florida has been able to keep the rate of Obesity comparatively low compared to every other highlighted state through out the period of 2015 - 2021
+
+
+
+
+\newpage
+# Section 8: References 
+
+1. Temple, N.J. The Origins of the Obesity Epidemic in the USA–Lessons for Today. 
+Nutrients 2022, 14, 4253. https://doi.org/10.3390/nu14204253
+
+2. Bleich, S.; Cutler, D.; Murray, C.; Adams, A. Why is the developed world obese? 
+Annu. Rev. Public Health 2008, 29, 273–295
+
+3. Ng, M.; Fleming, T.; Robinson, M.; Thomson, B.; Graetz, N.; Margono, C.; Mullany,
+E.C.; Biryukov, S.; Abbafati, C.; Abera, S.F.;et al. Global, regional, and 
+national prevalence of overweight and obesity in children and adults during 
+1980–2013: A systematic analysis for the Global Burden of Disease Study 2013.
+Lancet 2014, 384, 766–781
+
+4. Rodgers, A.; Woodward, A.; Swinburn, B.; Dietz, W.H. Prevalence trends tell us what did not precipitate the US obesity epidemic.
+Lancet Public Health 2018, 3, e162–e163.
